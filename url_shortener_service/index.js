@@ -5,7 +5,6 @@ const app = express();
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 const dns = require('dns');
-const { resolveObjectURL } = require('buffer');
 
 // Basic Configuration
 const port = process.env.PORT || 3000;
@@ -48,21 +47,28 @@ app.get('/', function(req, res) {
   res.sendFile(process.cwd() + '/views/index.html');
 });
 
+app.use(bodyParser.urlencoded({ extended: false }));
+
+app.use((req, _res, next) => {
+  const content = req.method === 'POST' ? req.body.url : req.params;
+  console.log(`${req.method} ${req.path} - ${req.ip}\n${content}`);
+  next();
+})
+
 // Your first API endpoint
 app.get('/api/hello', function(req, res) {
   res.json({ greeting: 'hello API' });
 });
 
-app.use('/api/shorturl', bodyParser.urlencoded({ extended: false }));
-
 app.post('/api/shorturl', async (req, res) => {
-  const matches = /(https?:\/\/)(.*$)/g.exec(req.body.url);
+  const matches = /(https?:\/\/)(.*)(\/.*$)/g.exec(req.body.url);
+  console.log(matches);
   if (!matches) {
     res.json({ error: 'invalid url' });
     return;
   }
 
-  [url, _protocol, domain] = matches;
+  [url, _protocol, domain, _path] = matches;
   dns.lookup(domain, async (err, _addresses, _family) => {
     if (err) {
       res.json({ error: 'invalid url' });
@@ -96,6 +102,7 @@ app.get('/api/shorturl/:short_url', async (req, res) => {
   mapping = await URLMapping.findOne({ short_url });
   if (!mapping) {
     res.json({ error: 'invalid short url' });
+    return;
   }
 
   res.redirect(mapping.orig_url);
